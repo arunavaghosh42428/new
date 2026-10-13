@@ -1,0 +1,10 @@
+// LearnSphere AI Tutor — Groq-compatible OpenAI API format. Keep GROQ_API_KEY in Netlify only.
+export default async (request) => {
+ const headers={"content-type":"application/json; charset=utf-8","cache-control":"no-store"};
+ if(request.method!=="POST") return new Response(JSON.stringify({error:"Use POST for tutor questions."}),{status:405,headers});
+ if(!process.env.GROQ_API_KEY) return new Response(JSON.stringify({error:"AI is not configured. Add GROQ_API_KEY in Netlify Environment variables, then redeploy."}),{status:503,headers});
+ let body; try{body=await request.json()}catch{return new Response(JSON.stringify({error:"Invalid request."}),{status:400,headers});}
+ const question=String(body.question||"").trim().slice(0,6000), language=String(body.language||"English").slice(0,40);
+ if(question.length<2)return new Response(JSON.stringify({error:"Please enter a question."}),{status:400,headers});
+ try{const r=await fetch("https://api.groq.com/openai/v1/chat/completions",{method:"POST",headers:{authorization:`Bearer ${process.env.GROQ_API_KEY}`,"content-type":"application/json"},body:JSON.stringify({model:process.env.GROQ_MODEL||"llama-3.3-70b-versatile",temperature:0.4,max_tokens:1200,messages:[{role:"system",content:`You are LearnSphere, a careful, friendly tutor for learners of different ages. Answer in ${language}. Teach step-by-step with examples, use clear headings, don't invent facts, and be careful with medical advice. For medical questions provide educational information only and advise consulting a qualified clinician.`},{role:"user",content:question}]})}); const d=await r.json(); if(!r.ok)return new Response(JSON.stringify({error:r.status===429?"AI rate limit reached. Check Groq usage limits.":"Groq could not answer. Check your API key and model."}),{status:r.status===429?429:502,headers}); const answer=d?.choices?.[0]?.message?.content?.trim(); if(!answer)throw Error(); return new Response(JSON.stringify({answer}),{status:200,headers});}catch{return new Response(JSON.stringify({error:"AI service unavailable. Please try again."}),{status:502,headers});}
+};
